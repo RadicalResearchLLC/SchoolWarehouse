@@ -17,9 +17,11 @@ school_wd <- paste0(wd, '/CSCD_2021.gdb')
 warehouse_wd <- paste0(wd, '/warehouse')
 app_wd <- paste0(wd, '/WarehouseCITY_school/')
 
+
+
 load(paste0(warehouse_wd, '/.RData'))
 
-counties <- c('Riverside', 'San Bernardino', 'Los Angeles')
+counties <- c('Riverside', 'San Bernardino')
 
 inland_parcels <- final_parcels %>% 
   mutate(county = ifelse(county == 'San Bernadino', 'San Bernardino', county)) %>% 
@@ -32,6 +34,12 @@ schools <- sf::st_read(dsn = school_wd, quiet = TRUE, type = 3) %>%
   st_transform("+proj=longlat +ellps=WGS84 +datum=WGS84") %>% 
   select(School, District, City, Status, GradesServed, Shape)
 
+URL.path <- 'https://raw.githubusercontent.com/RadicalResearchLLC/EDVcourse/main/CalEJ4/CalEJ.geoJSON'
+SoCalEJ <- st_read(URL.path) %>% 
+  st_transform("+proj=longlat +ellps=WGS84 +datum=WGS84") %>% 
+  filter(County %in% counties)
+
 setwd(app_wd)
 save.image('.RData')
-getwd()
+#getwd()
+setwd(wd)

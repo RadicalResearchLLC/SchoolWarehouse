@@ -1,0 +1,13 @@
+name: WarehouseCITY_school
+title: WarehouseCITY_school
+username:
+account: radicalresearch
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 6910869
+bundleId: 6264383
+url: https://radicalresearch.shinyapps.io/WarehouseCITY_school/
+when: 1662159035.71779
+lastSyncTime: 1662159035.7178
+asMultiple: FALSE
+asStatic: FALSE
