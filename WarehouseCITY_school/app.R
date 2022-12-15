@@ -36,31 +36,28 @@ ui <- fluidPage(title = 'Warehouse CITY school',
                 ##Create a tabset display to have a readme file and main warehouse page
                   tabPanel('Dashboard',
                            # Display slider bar selections, checkbox, and summary text
-                           fluidRow(column(2),
-                                    column(6, align = 'center', 
-                                        sliderInput('radius', 'Selection radius (feet)', 
-                                        min = 300, max = 10000, value = 1000, step =100)
-                                    )
+                          # fluidRow(column(2),
+                          #          column(6, align = 'center', 
+                          #              sliderInput('radius', 'Selection radius (feet)', 
+                          #             min = 0, max = 5000, value = 1000, step =100)
+                          #          )
                                     #column(2, textOutput('text2'))
-                           ),
-                           fluidRow(column(1),
-                                    column(8, align = 'center', dataTableOutput('Summary'))
-                           ),
+                          # ),
+                          # fluidRow(column(1),
+                          #          column(8, align = 'center', dataTableOutput('Summary'))
+                          # ),
                            # Display map and table
                            fluidRow(
                              column(1),
                              column(8, align = 'center', leafletOutput("map", height = 600))
                            ),
                            fluidRow(column(2),
-                                    column(6, align = 'center', dataTableOutput('warehouseDF'))),
+                                    column(6, align = 'center', dataTableOutput('schoolsNearWH'))),
                            fluidRow(column(9),
-                                    column(3, paste('Warehouse CITY School v1.01, last updated', Sys.Date())
+                                    column(3, paste('Warehouse CITY School v1.02, last updated', Sys.Date())
                                     )
                            )
                   )
-                  
-                
-                
 )
 
 server <- function(input, output) {
@@ -71,72 +68,68 @@ server <- function(input, output) {
   output$map <- renderLeaflet({
     map1 <- leaflet() %>%
       addTiles() %>%
-      setView(lat = 34, lng = -117.60, zoom = 10) %>%
+      setView(lat = 34, lng = -117.60, zoom = 9) %>%
       addProviderTiles(providers$Esri.WorldImagery, group = 'Imagery') %>%
-      addProviderTiles(providers$OpenRailwayMap, group = 'Rail') %>%
       addLayersControl(baseGroups = c('Basemap', 'Imagery'),
-                       overlayGroups = c('Warehouses', 'Schools', 'Circle', 
-                                         'Rail') , # 'SCAQMD boundary',
+                       overlayGroups = c('Warehouses', 'Schools near warehouses', 
+                       '1,000 Foot Buffer', 'all schools') , 
                        options = layersControlOptions(collapsed = FALSE)
-      )  %>%
-      addLegend(pal = paletteSize, 
-                values = c('28,000 to 100,000',  
-                           '100,000 to 250,000',
-                           '250,000 to 500,000',
-                           '500,000 to 1,000,000',
-                           '1,000,000+'),
-                title = 'Size bins (Sq.ft.)')
-    
-    map1 %>% hideGroup(c('Rail'))#, 'Warehouse Size', 'SCAQMD boundary')
+      )  
+    map1 %>% hideGroup(c('all schools'))
   })
   
-  OrBr <- c('beige' = '#EEE1B1',
-            'gold' = '#CF7820',
-            'carrot' = '#A94915',
-            'rust' = '#8D3312',
-            'brown' = '#5F1003')
-  
-  paletteSize <- colorFactor(OrBr,
-                             levels = c('28,000 to 100,000',  
-                                        '100,000 to 250,000',
-                                        '250,000 to 500,000',
-                                        '500,000 to 1,000,000',
-                                        '1,000,000+'), 
-                             reverse = FALSE)
-  
-  #Circle select
+  #Warehouse size bins
   observe({
-    leafletProxy("map", data = circle()) %>%
-      clearGroup(group = 'Circle') %>%
-      addPolygons(color = 'grey50',
-                  group = 'Circle')
+    leafletProxy("map", data = warehouses) %>%
+      clearGroup(group = 'Warehouses') %>%
+      addPolygons(color =  '#A94915',
+                  fillColor = '#A94915',
+                  weight = 2,
+                  fillOpacity = 0.4,
+                  group = 'Warehouses',
+                  label = ~htmlEscape(paste(round(shape_area,0), 'sq.ft.')))
+  })
+  #Circle select
+  #observe({
+  #  leafletProxy("map", data = circle()) %>%
+  #    clearGroup(group = 'Circle') %>%
+  #    addPolygons(color = 'grey50',
+  #                group = 'Circle')
+  #})
+  observe({
+    leafletProxy("map", data = schools) %>%
+      clearGroup(group = 'all schools') %>%
+      addPolygons(color = 'purple', weight = 0.6, 
+                  fillOpacity = 0.2,
+                  group = 'all schools',
+      )
+  })
+  
+  observe({
+    leafletProxy("map", data = SchoolsNearWH1000) %>%
+      clearGroup(group = '1,000 Foot Buffer') %>%
+      addPolygons(color = 'grey', weight = 1, 
+                  fillOpacity = 0.3,
+                  group = '1,000 Foot Buffer',
+      )
   })
 
   observe({
-    leafletProxy("map", data = schools) %>%
-      clearGroup(group = 'Schools') %>%
-      addPolygons(color = 'purple', weight = 1, opacity = 0.8,
+    leafletProxy("map", data = SchoolsNearWH2) %>%
+      clearGroup(group = 'Schools near warehouses') %>%
+      addPolygons(color = 'purple', weight = 3, fillOpacity = 0.8,
                   label = ~htmlEscape(paste(School, ' in ', District)),
-                  group = 'Schools',
+                  group = 'Schools near warehouses',
                   )
   })
-  #Warehouse size bins
-  observe({
-    leafletProxy("map", data = filteredParcels()) %>%
-      clearGroup(group = 'Warehouses') %>%
-      addPolygons(color =  '#A94915',
-                  fillColor = ~paletteSize(size_bin),
-                  weight = 2,
-                  fillOpacity = 0.8,
-                  group = 'Warehouses',
-                  label = ~htmlEscape(paste('Parcel', apn, ';', round(shape_area,0), 'sq.ft.', class, year_chr)))
-  })
+
+
   
   ## Generate a data table of warehouses in selected reactive data
-  output$warehouseDF <- DT::renderDataTable(
-    parcelDF_circle(), 
+  output$schoolsNearWH <- DT::renderDataTable(
+    schoolsNearWH, 
     server = FALSE,
-    caption  = 'Warehouse list by parcel number, square footage, and year built',
+    caption  = 'Schools with a warehouse within 1,000 feet',
     rownames = FALSE, 
     options = list(dom = 'Btp',
                    pageLength = 15,
@@ -174,14 +167,13 @@ server <- function(input, output) {
   ##Code to select nearby warehouse polygons
   nearby_warehouses <- reactive({
     req(circle())
-    nearby <- st_intersects(circle(), filteredParcels())
-    nearby2 <- filteredParcels()[nearby[[1]],] %>%
+    nearby <- st_intersects(circle(), warehouses)
+    nearby2 <- warehouses[nearby[[1]],] %>%
       as.data.frame() %>%
-      rename(parcel.number = apn) %>%
-      mutate(Sq.ft. = round(floorSpace.sq.ft, 0),
-             acreage = round(shape_area/43560, 0)) %>%
-      dplyr::select(parcel.number, class, year_chr, acreage, Sq.ft.) %>%
-      arrange(desc(Sq.ft.))
+     # rename(parcel.number = apn) %>%
+      mutate(acreage = round(shape_area/43560, 0)) %>%
+      dplyr::select(acreage) %>%
+      arrange(desc(acreage))
     
     return(nearby2)
   })
@@ -189,13 +181,12 @@ server <- function(input, output) {
   ##Select between data without selection radius or with
   parcelDF_circle <- reactive({
     if (is.null(input$map_click)) {
-      warehouse2 <- filteredParcels() %>%
+      warehouse2 <- warehouses %>%
         as.data.frame() %>%
-        rename(parcel.number = apn) %>%
-        mutate(Sq.ft. = round(floorSpace.sq.ft, 0),
-               acreage = round(shape_area/43560, 0)) %>%
-        dplyr::select(parcel.number, class, type, year_chr, acreage, Sq.ft.) %>%
-        arrange(desc(Sq.ft.)) 
+        #rename(parcel.number = apn) %>%
+        mutate(acreage = round(shape_area/43560, 0)) %>%
+        dplyr::select(acreage) %>%
+        arrange(desc(acreage))
       
     }
     else {
@@ -207,34 +198,7 @@ server <- function(input, output) {
   
   ##Add variables for Heavy-duty diesel truck calculations
   
-  #Truck trips = WAIRE 100k sq.ft. number
-  #emissions per mile calculated from EMFAC 2022 SCAQMD VMT weighted heavy duty fleet
-  Truck_trips_1000sqft <- 0.67
-  DPM_VMT_2022_lbs <- 0.00005415206
-  NOX_VMT_2022_lbs <- 0.006287505
-  CO2_VMT_2022_lbs <- 3.380869
-  trip_length <- 25
-  
-  ## calculate summary stats
-  
-  SumStats <- reactive({
-    parcelDF_circle() %>%
-      summarize(Warehouses = n(), 'Warehouse Acreage' = round(sum(acreage), 0), 
-                Total.Bldg.Sq.ft = round(sum(Sq.ft.), 0)) %>%
-      mutate(Truck.Trips = round(Truck_trips_1000sqft*0.001*Total.Bldg.Sq.ft ,0)) %>%
-      mutate('Daily Diesel PM (pounds)' = round(trip_length*Truck.Trips*DPM_VMT_2022_lbs,1),
-             'Daily NOx (pounds)' = round(trip_length*Truck.Trips*NOX_VMT_2022_lbs, 0),
-             'Daily CO2 (pounds)' = round(trip_length*Truck.Trips*CO2_VMT_2022_lbs, 0)) %>%
-      rename('Warehouse floor space (Sq.Ft.)' = Total.Bldg.Sq.ft,  'Daily Truck trips' = Truck.Trips)
-  })
-  
-  ##Display summary table
-  output$Summary <- renderDataTable(
-    SumStats(), 
-    caption  = 'This interactive map shows the logistics industry footprint in Los Angeles, Riverside, and San Bernadino Counties.  Zoom in and/or click an area to see specific community impacts. Summary statistics are estimates based on publicly available datasets. Please see Readme tab for more information on methods and data sources.',
-    rownames = FALSE, 
-    options = list(dom = '') 
-  )
+
   
   #output$text2 <- renderText({
   #  req(input$map_click)
