@@ -18,7 +18,7 @@ school_wd <- paste0(wd, '/CSCD_2021.gdb')
 app_wd <- paste0(wd, '/WarehouseCITY_school/')
 
 
-WH.url <- 'https://raw.githubusercontent.com/RadicalResearchLLC/WarehouseMap/main/WarehouseCITY/geoJSON/warehouse.geoJSON'
+WH.url <- 'https://raw.githubusercontent.com/RadicalResearchLLC/WarehouseMap/main/WarehouseCITY/geoJSON/finalParcels.geojson'
 warehouses <- st_read(WH.url) %>% 
   st_transform("+proj=longlat +ellps=WGS84 +datum=WGS84") %>% 
   select(shape_area, county, geometry) %>% 
@@ -52,11 +52,6 @@ buffSchool1000 <- schools %>%
   st_transform(crs = 4326) #%>% 
 
 
-setwd(app_wd)
-save.image('.RData')
-#getwd()
-setwd(wd)
-
 leaflet() %>% 
   addTiles() %>% 
   addPolygons(data = buffSchool1000,
@@ -87,7 +82,6 @@ SchoolsNearWH1000 <- schoolsNearWH %>%
   left_join(buffSchool1000) %>%  
   st_as_sf() %>% 
   distinct()
-  
 
 
 setwd(app_wd)
