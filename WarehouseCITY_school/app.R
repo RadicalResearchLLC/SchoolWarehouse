@@ -21,6 +21,8 @@ library(markdown)
 #library(automap)
 #library(gstat)
 
+ver_date <- 'April 9, 2024'
+
 ## Define UI for application that displays warehouses
 # Show app name and logos
 ui <- fluidPage(title = 'Warehouse CITY school',
@@ -31,7 +33,9 @@ ui <- fluidPage(title = 'Warehouse CITY school',
                                   div(style = 'height:60px; font-size: 30px;',
                                       'Warehouse CITY School')),
                            column(2, shiny::img(height = 60, src = 'Logo_Redford.jpg')),
-                           column(2, shiny::img(height = 38, src = 'Logo.png')))
+                           column(2, shiny::img(height = 38, src = 'Logo.png')),
+                           column(2, shiny::img(height = 60, src = 'RNOW.png'))
+                  )
                 ),
                 ##Create a tabset display to have a readme file and main warehouse page
                   tabPanel('Dashboard',
@@ -48,13 +52,10 @@ ui <- fluidPage(title = 'Warehouse CITY school',
                           # ),
                            # Display map and table
                            fluidRow(
-                             column(1),
-                             column(8, align = 'center', leafletOutput("map", height = 600))
-                           ),
-                           fluidRow(column(2),
-                                    column(6, align = 'center', dataTableOutput('schoolsNearWH'))),
+                             column(7, align = 'center', dataTableOutput('schoolsNearWH')),
+                             column(5, align = 'center', leafletOutput("map", height = 600))),
                            fluidRow(column(9),
-                                    column(3, paste('Warehouse CITY School v1.02, last updated', Sys.Date())
+                                    column(3, paste('Warehouse CITY School v1.03, last updated', ver_date)
                                     )
                            )
                   )
@@ -66,48 +67,57 @@ server <- function(input, output) {
   #Create leaflet map with legend and layers control
   
   output$map <- renderLeaflet({
-    map1 <- leaflet() %>%
-      addTiles() %>%
-      setView(lat = 34, lng = -117.60, zoom = 9) %>%
-      addProviderTiles(providers$Esri.WorldImagery, group = 'Imagery') %>%
+    map1 <- leaflet() |>
+      addProviderTiles(providers$CartoDB.Positron) |> 
+      setView(lat = 34, lng = -117.30, zoom = 11) |>
+      addProviderTiles(providers$Esri.WorldImagery, group = 'Imagery') |>
       addLayersControl(baseGroups = c('Basemap', 'Imagery'),
                        overlayGroups = c('Warehouses', 'Schools near warehouses', 
                        '1,000 Foot Buffer', 'all schools') , 
                        options = layersControlOptions(collapsed = FALSE)
       )  
-    map1 %>% hideGroup(c('all schools'))
+    map1 |> hideGroup(c('all schools'))
   })
+  
+  palWH <- colorFactor(domain = warehouses$category,
+                       palette = c('red', 'black'))
   
   #Warehouse size bins
   observe({
-    leafletProxy("map", data = warehouses) %>%
-      clearGroup(group = 'Warehouses') %>%
-      addPolygons(color =  '#A94915',
-                  fillColor = '#A94915',
-                  weight = 2,
+    leafletProxy("map", data = warehouses) |>
+      clearGroup(group = 'Warehouses') |>
+      addPolygons(color =  ~palWH(category),
+                  weight = 1,
                   fillOpacity = 0.4,
                   group = 'Warehouses',
-                  label = ~htmlEscape(paste(round(shape_area,0), 'sq.ft.')))
+                  label = ~htmlEscape(paste(round(shape_area,0), 'sq.ft.'))) |> 
+      addLegend(data = warehouses,
+                pal = palWH,
+                title = 'category',
+                values = ~category,
+                position = 'bottomleft')
   })
   #Circle select
   #observe({
-  #  leafletProxy("map", data = circle()) %>%
-  #    clearGroup(group = 'Circle') %>%
+  #  leafletProxy("map", data = circle()) |>
+  #    clearGroup(group = 'Circle') |>
   #    addPolygons(color = 'grey50',
   #                group = 'Circle')
   #})
   observe({
-    leafletProxy("map", data = schools) %>%
-      clearGroup(group = 'all schools') %>%
-      addPolygons(color = 'purple', weight = 0.6, 
-                  fillOpacity = 0.2,
+    leafletProxy("map", data = schools) |>
+      clearGroup(group = 'all schools') |>
+      addPolygons(color = 'purple', 
+                  weight = 1, 
+                  fillOpacity = 0.4,
                   group = 'all schools',
+                  label = ~School
       )
   })
   
   observe({
-    leafletProxy("map", data = SchoolsNearWH1000) %>%
-      clearGroup(group = '1,000 Foot Buffer') %>%
+    leafletProxy("map", data = SchoolsNearWH1000) |>
+      clearGroup(group = '1,000 Foot Buffer') |>
       addPolygons(color = 'grey', weight = 1, 
                   fillOpacity = 0.3,
                   group = '1,000 Foot Buffer',
@@ -115,8 +125,8 @@ server <- function(input, output) {
   })
 
   observe({
-    leafletProxy("map", data = SchoolsNearWH2) %>%
-      clearGroup(group = 'Schools near warehouses') %>%
+    leafletProxy("map", data = SchoolsNearWH2) |>
+      clearGroup(group = 'Schools near warehouses') |>
       addPolygons(color = 'purple', weight = 3, fillOpacity = 0.8,
                   label = ~htmlEscape(paste(School, ' in ', District)),
                   group = 'Schools near warehouses',
@@ -131,18 +141,21 @@ server <- function(input, output) {
     server = FALSE,
     caption  = 'Schools with a warehouse within 1,000 feet',
     rownames = FALSE, 
-    options = list(dom = 'Btp',
-                   pageLength = 15,
-                   buttons = c('csv','excel')),
+    options = list(
+      dom = 'Btp',
+      pageLength = 10,
+      buttons = list( 
+        list(extend = 'csv', filename = paste('School_list', sep='-')),
+        list(extend = 'excel', filename =  paste("School_List", sep = "-")))),
     extensions = c('Buttons'),
     filter = list(position = 'top', clear = FALSE)
   )
   ## Reactive data selection logic
   # First select parcels based on checkbox and year range input
   filteredParcels <- reactive({
-      selectedYears <- inland_parcels %>%
-        #dplyr::filter(year_chr != 'unknown') %>%
-      #  dplyr::filter(year_built >= input$year_slider[1] & year_built <= input$year_slider[2]) %>%
+      selectedYears <- inland_parcels |>
+        #dplyr::filter(year_chr != 'unknown') |>
+      #  dplyr::filter(year_built >= input$year_slider[1] & year_built <= input$year_slider[2]) |>
         mutate(shape_area = round(shape_area, 0))
     
     return(selectedYears)
@@ -157,9 +170,9 @@ server <- function(input, output) {
     lng1 <- round(input$map_click$lng, 8)
     clickedCoords <- data.frame(lng1, lat1)
     
-    dat_point <- st_as_sf(clickedCoords, coords = c('lng1', 'lat1'), crs = 4326) %>%
+    dat_point <- st_as_sf(clickedCoords, coords = c('lng1', 'lat1'), crs = 4326) |>
       st_transform(3857)
-    circle_sf <- st_buffer(dat_point, distance) %>%
+    circle_sf <- st_buffer(dat_point, distance) |>
       st_transform("+proj=longlat +ellps=WGS84 +datum=WGS84")
     return(circle_sf)
   })
@@ -168,11 +181,11 @@ server <- function(input, output) {
   nearby_warehouses <- reactive({
     req(circle())
     nearby <- st_intersects(circle(), warehouses)
-    nearby2 <- warehouses[nearby[[1]],] %>%
-      as.data.frame() %>%
-     # rename(parcel.number = apn) %>%
-      mutate(acreage = round(shape_area/43560, 0)) %>%
-      dplyr::select(acreage) %>%
+    nearby2 <- warehouses[nearby[[1]],] |>
+      as.data.frame() |>
+     # rename(parcel.number = apn) |>
+      mutate(acreage = round(shape_area/43560, 0)) |>
+      dplyr::select(acreage) |>
       arrange(desc(acreage))
     
     return(nearby2)
@@ -181,16 +194,16 @@ server <- function(input, output) {
   ##Select between data without selection radius or with
   parcelDF_circle <- reactive({
     if (is.null(input$map_click)) {
-      warehouse2 <- warehouses %>%
-        as.data.frame() %>%
-        #rename(parcel.number = apn) %>%
-        mutate(acreage = round(shape_area/43560, 0)) %>%
-        dplyr::select(acreage) %>%
+      warehouse2 <- warehouses |>
+        as.data.frame() |>
+        #rename(parcel.number = apn) |>
+        mutate(acreage = round(shape_area/43560, 0)) |>
+        dplyr::select(acreage) |>
         arrange(desc(acreage))
       
     }
     else {
-      warehouse2 <- nearby_warehouses() %>%
+      warehouse2 <- nearby_warehouses() |>
         as.data.frame()
     }
     return(warehouse2)
